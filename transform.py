@@ -2,7 +2,9 @@ import os
 os.environ["PYSPARK_PYTHON"] = r"C:\Users\hp\AppData\Local\Programs\Python\Python310\python.exe"
 
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import when, col
+from pyspark.sql.functions import when, col, countDistinct, lag, round
+from pyspark.sql.window import Window
+
 spark = SparkSession.builder.appName('ClickstreamTransform').getOrCreate()
 
 df_pyspark = spark.read.csv('2019-Oct.csv', header = True, inferSchema = True)
@@ -23,6 +25,32 @@ df_pyspark.select(
     "funnel_stage",
     "user_session"
 ).show(10, truncate = False)
+
+funnel_summary = df_pyspark.groupby("funnel_stage").agg(
+    countDistinct("user_session").alias("unique_sessions")
+    ).orderBy("funnel_stage")
+
+window_spec = Window.orderBy("funnel_stage")
+
+funnel_summary = funnel_summary.withColumn(
+    "previous_stage_sessions",
+    lag("unique_sessions", 1).over(window_spec)
+)
+
+funnel_summary = funnel_summary.withColumn(
+    "drop_off_rate",
+    when(
+        col("previous_stage_sessions").isNull(),
+        0
+    ).otherwise(
+        round(
+            (1 - (col("unique_sessions") / col("previous_stage_sessions"))) * 100,
+            2
+        )
+    )
+)
+
+funnel_summary.show()
 
 df_pyspark.printSchema()
 
