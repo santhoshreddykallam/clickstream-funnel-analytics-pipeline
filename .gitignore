@@ -13,3 +13,6 @@ __pycache__/
 derby.log
 metastore_db/
 spark-warehouse/
+
+output/
+derby.log

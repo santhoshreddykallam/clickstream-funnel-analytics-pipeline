@@ -1,4 +1,6 @@
 import os
+import sys
+
 os.environ["PYSPARK_PYTHON"] = r"C:\Users\hp\AppData\Local\Programs\Python\Python310\python.exe"
 
 from pyspark.sql import SparkSession
@@ -7,7 +9,9 @@ from pyspark.sql.window import Window
 
 spark = SparkSession.builder.appName('ClickstreamTransform').getOrCreate()
 
-df_pyspark = spark.read.csv('2019-Oct.csv', header = True, inferSchema = True)
+filename = sys.argv[1]
+
+df_pyspark = spark.read.csv(filename, header = True, inferSchema = True)
 
 df_pyspark = df_pyspark.drop('category_code')
 df_pyspark = df_pyspark.na.drop(how = 'any', subset = ['user_session'])
@@ -25,6 +29,8 @@ df_pyspark.select(
     "funnel_stage",
     "user_session"
 ).show(10, truncate = False)
+
+df_pyspark.write.mode("overwrite").parquet("output/parquet/")
 
 funnel_summary = df_pyspark.groupby("funnel_stage").agg(
     countDistinct("user_session").alias("unique_sessions")
