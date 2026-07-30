@@ -16,3 +16,5 @@ spark-warehouse/
 
 output/
 derby.log
+
+PG_PASSWORD
