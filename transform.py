@@ -20,8 +20,7 @@ df_pyspark = df_pyspark.withColumn(
     "funnel_stage",
     when(col("event_type") == "view", 1)
     .when(col("event_type") == "cart", 2)
-    .when(col("event_type") == "remove_from_cart", 3)
-    .otherwise(4)
+    .when(col("event_type") == "purchase", 3)
 )
 
 df_pyspark.select(
@@ -35,6 +34,11 @@ df_pyspark.write.mode("overwrite").parquet("output/parquet/")
 funnel_summary = df_pyspark.groupby("funnel_stage").agg(
     countDistinct("user_session").alias("unique_sessions")
     ).orderBy("funnel_stage")
+
+funnel_summary = funnel_summary.filter(col("funnel_stage").isNotNull())
+
+cart_removal_sessions = df_pyspark.filter(col("event_type") == "remove_from_cart").agg(
+    countDistinct("user_session").alias("cart_removal_sessions"))
 
 window_spec = Window.orderBy("funnel_stage")
 
@@ -57,6 +61,7 @@ funnel_summary = funnel_summary.withColumn(
 )
 
 funnel_summary.show()
+cart_removal_sessions.show()
 
 df_pyspark.printSchema()
 

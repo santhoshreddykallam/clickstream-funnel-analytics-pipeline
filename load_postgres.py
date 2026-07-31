@@ -18,6 +18,7 @@ from pyspark.sql.functions import (
     round
 )
 from pyspark.sql.window import Window
+from datetime import datetime
 
 # -----------------------------
 # Spark Session
@@ -35,6 +36,9 @@ input_file = sys.argv[1]
 
 # Extract month from filename
 month = os.path.splitext(os.path.basename(input_file))[0]
+
+# Convert to a Python date (e.g., 2019-10-01)
+month_start_date = datetime.strptime(month, "%Y-%b").date()
 
 # -----------------------------
 # Read CSV
@@ -54,7 +58,6 @@ df_clean = (
         col("event_type").isin(
             "view",
             "cart",
-            "remove_from_cart",
             "purchase"
         )
     )
@@ -65,11 +68,10 @@ df_clean = (
 # -----------------------------
 df_stage = (
     df_clean.withColumn(
-        "stage",
+        "funnel_stage",
         when(col("event_type") == "view", 1)
         .when(col("event_type") == "cart", 2)
-        .when(col("event_type") == "remove_from_cart", 3)
-        .when(col("event_type") == "purchase", 4)
+        .when(col("event_type") == "purchase", 3)
     )
 )
 
@@ -78,20 +80,19 @@ df_stage = (
 # -----------------------------
 funnel_summary = (
     df_stage
-    .groupBy("stage")
+    .groupBy("funnel_stage")
     .agg(
         countDistinct("user_session").alias("unique_sessions")
     )
-    .orderBy("stage")
+    .orderBy("funnel_stage")
 )
 
-# -----------------------------
-# Rename stage -> funnel_stage
-# -----------------------------
-funnel_summary = funnel_summary.withColumnRenamed(
-    "stage",
-    "funnel_stage"
-)
+funnel_summary = funnel_summary.filter(col("funnel_stage").isNotNull())
+
+cart_removal_sessions = df.filter(col("event_type") == "remove_from_cart").agg(
+    countDistinct("user_session").alias("cart_removal_sessions"))
+
+cart_removal_count = cart_removal_sessions.collect()[0][0]
 
 # -----------------------------
 # Add stage_name
@@ -101,8 +102,7 @@ funnel_summary = (
         "stage_name",
         when(col("funnel_stage") == 1, "view")
         .when(col("funnel_stage") == 2, "cart")
-        .when(col("funnel_stage") == 3, "remove_from_cart")
-        .when(col("funnel_stage") == 4, "purchase")
+        .when(col("funnel_stage") == 3, "purchase")
     )
 )
 
@@ -138,9 +138,10 @@ funnel_summary = (
 # -----------------------------
 # Add month
 # -----------------------------
-funnel_summary = funnel_summary.withColumn(
-    "month",
-    lit(month)
+funnel_summary = (
+    funnel_summary
+    .withColumn("month", lit(month))
+    .withColumn("month_start_date", lit(month_start_date))
 )
 
 # -----------------------------
@@ -168,9 +169,11 @@ INSERT INTO funnel_summary
     unique_sessions,
     previous_stage_sessions,
     drop_off_rate,
-    month
+    cart_removal_sessions,
+    month,
+    month_start_date
 )
-VALUES (%s, %s, %s, %s, %s, %s)
+VALUES (%s, %s, %s, %s, %s, %s, %s)
 """
 
 for _, row in pdf.iterrows():
@@ -182,7 +185,9 @@ for _, row in pdf.iterrows():
             int(row["unique_sessions"]),
             None if pd.isna(row["previous_stage_sessions"]) else int(row["previous_stage_sessions"]),
             float(row["drop_off_rate"]),
-            row["month"]
+            int(cart_removal_count),
+            row["month"],
+            row["month_start_date"]
         )
     )
 
