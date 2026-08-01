@@ -18,3 +18,6 @@ output/
 derby.log
 
 PG_PASSWORD
+
+airflow/logs/
+airflow/plugins/

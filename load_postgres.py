@@ -26,6 +26,8 @@ from datetime import datetime
 spark = (
     SparkSession.builder
     .appName("Load Funnel Summary to PostgreSQL")
+    .master("local[2]")
+    .config("spark.sql.shuffle.partitions", "2")
     .getOrCreate()
 )
 
@@ -153,7 +155,7 @@ pdf = funnel_summary.toPandas()
 # Load into PostgreSQL
 # -----------------------------
 conn = psycopg2.connect(
-    host="localhost",
+    host="host.docker.internal",
     database="clickstream_db",
     user="postgres",
     password=os.environ.get("PG_PASSWORD")
@@ -173,7 +175,7 @@ INSERT INTO funnel_summary
     month,
     month_start_date
 )
-VALUES (%s, %s, %s, %s, %s, %s, %s)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 for _, row in pdf.iterrows():
