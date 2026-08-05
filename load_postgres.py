@@ -2,7 +2,7 @@ import os
 
 os.environ["PYSPARK_PYTHON"] = r"C:\Users\hp\AppData\Local\Programs\Python\Python310\python.exe"
 os.environ["HADOOP_HOME"] = r"C:\hadoop"
-os.environ["PG_PASSWORD"] = "Santhu@123"
+os.environ["PG_PASSWORD"] = "USE_YOUR_POSTGRES_PASSWORD"
 
 import sys
 import psycopg2
